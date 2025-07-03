@@ -1,0 +1,7 @@
+-cp src
+-cp ../../src
+-dce no
+-lib tink_core
+-lib hscript-template
+--macro grig.audio.hxal.Macro.setEnvironment("cpp")
+--run SineProcessor

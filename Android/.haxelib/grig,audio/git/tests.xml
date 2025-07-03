@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project>
+
+    <meta title="Tests" package="tech.grig.audio.tests" version="1.0.0" company="Osaka Red LLC" />
+    <app main="RunLimeTests" path="Export" file="Tests" />
+
+    <source path="src" />
+    <source path="tests" />
+
+    <haxeflag name="-resource" value="tests/tri.ogg" />
+
+    <haxelib name="lime" />
+    <haxelib name="tink_unittest" />
+
+</project>

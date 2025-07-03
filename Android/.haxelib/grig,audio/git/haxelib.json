@@ -1,0 +1,20 @@
+{
+  "name": "grig.audio",
+  "url" : "https://grig.tech/",
+  "license": "MIT",
+  "tags": [
+    "audio",
+    "samples",
+    "effects"
+  ],
+  "description": "Cross-target abstractions for supporting audio ports (C++, python, js/webmidi, python) and working with buffers of audio data.",
+  "classPath": "src",
+  "contributors": [
+    "thomasjwebb"
+  ],
+  "releasenote": "Added realtime audio checker",
+  "version": "0.0.5",
+  "dependencies": {
+    "tink_core": "1.26.0"
+  }
+}
