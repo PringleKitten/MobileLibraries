@@ -36,29 +36,20 @@ namespace lime {
 
 		}
 
+		#if defined(ANDROID) || defined (IPHONE)
+		SDL_SetEventFilter (HandleAppLifecycleEvent, NULL);
+		#endif
+
 		SDL_LogSetPriority (SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_WARN);
 
 		currentApplication = this;
 
-		framePeriod = 1000.0 / 60.0;
+		framePeriod = 1.0 / 60.0;
 
 		currentUpdate = 0;
-		lastUpdate = 0;
 		nextUpdate = 0;
-
-		ApplicationEvent applicationEvent;
-		ClipboardEvent clipboardEvent;
-		DropEvent dropEvent;
-		GamepadEvent gamepadEvent;
-		JoystickEvent joystickEvent;
-		KeyEvent keyEvent;
-		MouseEvent mouseEvent;
-		OrientationEvent orientationEvent;
-		RenderEvent renderEvent;
-		SensorEvent sensorEvent;
-		TextEvent textEvent;
-		TouchEvent touchEvent;
-		WindowEvent windowEvent;
+		lastUpdate = SDL_GetPerformanceCounter ();
+		freq = SDL_GetPerformanceFrequency ();
 
 		SDL_EventState (SDL_DROPFILE, SDL_ENABLE);
 		SDLJoystick::Init ();
@@ -128,50 +119,26 @@ namespace lime {
 
 			case SDL_USEREVENT:
 
-				if (!inBackground) {
+				// if (!inBackground) {
 
-					currentUpdate = SDL_GetTicks ();
-					applicationEvent.type = UPDATE;
-					applicationEvent.deltaTime = currentUpdate - lastUpdate;
-					lastUpdate = currentUpdate;
+				// 	currentUpdate = SDL_GetTicks ();
+				// 	applicationEvent.type = UPDATE;
+				// 	applicationEvent.deltaTime = currentUpdate - lastUpdate;
+				// 	lastUpdate = currentUpdate;
 
-					nextUpdate += framePeriod;
+				// 	nextUpdate += framePeriod;
 
-					while (nextUpdate <= currentUpdate) {
+				// 	while (nextUpdate <= currentUpdate) {
 
-						nextUpdate += framePeriod;
+				// 		nextUpdate += framePeriod;
 
-					}
+				// 	}
 
-					ApplicationEvent::Dispatch (&applicationEvent);
-					RenderEvent::Dispatch (&renderEvent);
+				// 	ApplicationEvent::Dispatch (&applicationEvent);
+				// 	RenderEvent::Dispatch (&renderEvent);
 
-				}
+				// }
 
-				break;
-
-			case SDL_APP_WILLENTERBACKGROUND:
-
-				inBackground = true;
-
-				windowEvent.type = WINDOW_DEACTIVATE;
-				WindowEvent::Dispatch (&windowEvent);
-				break;
-
-			case SDL_APP_WILLENTERFOREGROUND:
-
-				break;
-
-			case SDL_APP_DIDENTERFOREGROUND:
-
-				/*#ifdef __ANDROID__
-				SDL_GL_SetSwapInterval(0);
-				#endif*/
-
-				windowEvent.type = WINDOW_ACTIVATE;
-				WindowEvent::Dispatch (&windowEvent);
-
-				inBackground = false;
 				break;
 
 			case SDL_CLIPBOARDUPDATE:
@@ -852,11 +819,11 @@ namespace lime {
 
 		if (frameRate > 0) {
 
-			framePeriod = 1000.0 / frameRate;
+			framePeriod = 1.0 / frameRate;
 
 		} else {
 
-			framePeriod = 1000.0;
+			framePeriod = 1.0;
 
 		}
 
@@ -893,61 +860,99 @@ namespace lime {
 		SDL_Event event;
 		event.type = -1;
 
-		#if (!defined (IPHONE) && !defined (EMSCRIPTEN))
-
-		if (active && (firstTime || WaitEvent (&event))) {
-
-			firstTime = false;
-
+		while (SDL_PollEvent (&event)) {
 			HandleEvent (&event);
 			event.type = -1;
 			if (!active)
 				return active;
 
-		#endif
-
-			while (SDL_PollEvent (&event)) {
-
-				HandleEvent (&event);
-				event.type = -1;
-				if (!active)
-					return active;
-
-			}
-
-			currentUpdate = SDL_GetTicks ();
-
-		#if defined (IPHONE) || defined (EMSCRIPTEN)
-
-			if (currentUpdate >= nextUpdate) {
-
-				event.type = SDL_USEREVENT;
-				HandleEvent (&event);
-				event.type = -1;
-
-			}
-
-		#else
-
-			if (currentUpdate >= nextUpdate) {
-
-				if (timerActive) SDL_RemoveTimer (timerID);
-				OnTimer (0, 0);
-
-			} else if (!timerActive) {
-
-				timerActive = true;
-				timerID = SDL_AddTimer (nextUpdate - currentUpdate, OnTimer, 0);
-
-			}
-
 		}
 
+
+		#if (!defined (IPHONE) && !defined (EMSCRIPTEN))
+		if (!inBackground) {
+		#endif
+			currentUpdate = SDL_GetPerformanceCounter ();
+			
+	        double deltaTime = (double)(currentUpdate - lastUpdate) / freq;
+		    if (deltaTime < framePeriod) {
+				double waitTime = framePeriod - deltaTime;
+            	Uint64 waitTicks = (Uint64)(waitTime * freq);
+            	SDL_Delay((waitTicks * 1000) / freq);
+            	currentUpdate = SDL_GetPerformanceCounter();
+            	deltaTime += waitTime;
+        	}
+			lastUpdate = currentUpdate;
+
+			applicationEvent.type = UPDATE;
+			applicationEvent.deltaTime = deltaTime * 1000;
+
+			ApplicationEvent::Dispatch (&applicationEvent);
+			RenderEvent::Dispatch (&renderEvent);
+		#if (!defined (IPHONE) && !defined (EMSCRIPTEN))
+		}
 		#endif
 
 		return active;
 
 	}
+
+
+	#if defined(ANDROID) || defined (IPHONE)
+	int SDLApplication::HandleAppLifecycleEvent (void* userdata, SDL_Event* event) {
+
+		#if defined(IPHONE)
+
+		int top = 0;
+
+		gc_set_top_of_stack (&top, false);
+
+		#endif
+
+		switch (event->type) {
+
+			case SDL_APP_TERMINATING:
+
+				return 0;
+
+			case SDL_APP_LOWMEMORY:
+
+				return 0;
+
+			case SDL_APP_WILLENTERBACKGROUND:
+
+				return 0;
+
+			case SDL_APP_DIDENTERBACKGROUND:
+
+				#ifdef __ANDROID__
+				SDL_GL_SetSwapInterval(0);
+				#endif
+
+				inBackground = true;
+				currentApplication->windowEvent.type = WINDOW_DEACTIVATE;
+				WindowEvent::Dispatch (&currentApplication->windowEvent);
+				return 0;
+
+			case SDL_APP_WILLENTERFOREGROUND:
+
+				return 0;
+
+			case SDL_APP_DIDENTERFOREGROUND:
+
+				currentApplication->windowEvent.type = WINDOW_ACTIVATE;
+				WindowEvent::Dispatch (&currentApplication->windowEvent);
+				inBackground = false;
+				return 0;
+
+			default:
+
+				return 1;
+
+		}
+
+	}
+	#endif
 
 
 	void SDLApplication::UpdateFrame () {

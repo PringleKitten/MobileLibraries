@@ -176,11 +176,6 @@ class IOSPlatform extends PlatformTarget
 		{
 			project.haxeflags.push("-xml " + targetDirectory + "/types.xml");
 		}
-		
-		if (project.targetFlags.exists("json"))
-		{
-			project.haxeflags.push("--json " + targetDirectory + "/types.json");
-		}
 
 		if (project.targetFlags.exists("final"))
 		{
@@ -193,6 +188,7 @@ class IOSPlatform extends PlatformTarget
 		}
 
 		IOSHelper.getIOSVersion(project);
+
 		project.haxedefs.set("IPHONE_VER", project.environment.get("IPHONE_VER"));
 
 		if (project.config.getString("ios.compiler") == "llvm" || project.config.getString("ios.compiler", "clang") == "clang")
@@ -225,7 +221,8 @@ class IOSPlatform extends PlatformTarget
 			if (!StringTools.endsWith(dependency.name, ".framework")
 				&& !StringTools.endsWith(dependency.name, ".tbd")
 				&& !StringTools.endsWith(dependency.path, ".framework")
-				&& !StringTools.endsWith(dependency.path, ".xcframework"))
+				&& !StringTools.endsWith(dependency.path, ".xcframework")
+				&& !StringTools.endsWith(dependency.path, ".bundle"))
 			{
 				if (dependency.path != "")
 				{
@@ -252,6 +249,7 @@ class IOSPlatform extends PlatformTarget
 		}
 
 		var valid_archs = new Array<String>();
+		var armv6 = false;
 		var armv7 = false;
 		var armv7s = false;
 		var arm64 = false;
@@ -263,10 +261,21 @@ class IOSPlatform extends PlatformTarget
 			architectures = [Architecture.ARM64];
 		}
 
+		if (project.config.getString("ios.device", "universal") == "universal" || project.config.getString("ios.device") == "iphone")
+		{
+			if (project.config.getFloat("ios.deployment", 13) < 5)
+			{
+				ArrayTools.addUnique(architectures, Architecture.ARMV6);
+			}
+		}
+
 		for (architecture in project.architectures)
 		{
 			switch (architecture)
 			{
+				case ARMV6:
+					valid_archs.push("armv6");
+					armv6 = true;
 				case ARMV7:
 					valid_archs.push("armv7");
 					armv7 = true;
@@ -288,23 +297,25 @@ class IOSPlatform extends PlatformTarget
 		valid_archs.push("x86_64");
 
 		context.VALID_ARCHS = valid_archs.join(" ");
+		context.THUMB_SUPPORT = armv6 ? "GCC_THUMB_SUPPORT = NO;" : "";
 
 		var requiredCapabilities = [];
 
-		if (armv7)
+		if (!armv6 && armv7)
 		{
 			requiredCapabilities.push({name: "armv7", value: true});
 		}
-		else if (!armv7 && armv7s)
+		else if (!armv6 && !armv7 && armv7s)
 		{
 			requiredCapabilities.push({name: "armv7s", value: true});
 		}
-		else if (!armv7 && !armv7s && arm64)
+		else if (!armv6 && !armv7 && !armv7s && arm64)
 		{
 			requiredCapabilities.push({name: "arm64", value: true});
 		}
 
 		context.REQUIRED_CAPABILITY = requiredCapabilities;
+		context.ARMV6 = armv6;
 		context.ARMV7 = armv7;
 		context.ARMV7S = armv7s;
 		context.ARM64 = arm64;
@@ -363,6 +374,8 @@ class IOSPlatform extends PlatformTarget
 
 		context.ADDL_PBX_BUILD_FILE = "";
 		context.ADDL_PBX_FILE_REFERENCE = "";
+		context.ADDL_PBX_RESOURCES_BUILD_PHASE = "";
+		context.ADDL_PBX_RESOURCE_GROUP = "";
 		context.ADDL_PBX_FRAMEWORKS_BUILD_PHASE = "";
 		context.ADDL_PBX_FRAMEWORK_GROUP = "";
 
@@ -398,20 +411,33 @@ class IOSPlatform extends PlatformTarget
 				path = Path.tryFullPath(dependency.path);
 				fileType = "wrapper.xcframework";
 			}
+			else if (Path.extension(dependency.path) == "bundle")
+			{
+				name = Path.withoutDirectory(dependency.path);
+				path = Path.tryFullPath(dependency.path);
+				fileType = "wrapper.plug-in";
+			}
 
 			if (name != null)
 			{
-				var frameworkID = "11C0000000000018" + StringTools.getUniqueID();
+				var buildFileID = "11C0000000000018" + StringTools.getUniqueID();
 				var fileID = "11C0000000000018" + StringTools.getUniqueID();
 
-				ArrayTools.addUnique(context.frameworkSearchPaths, Path.directory(path));
+				switch (fileType)
+				{
+					case "wrapper.plug-in":
+						context.ADDL_PBX_BUILD_FILE += "        " + buildFileID + " /* " + name + " in Resources */ = {isa = PBXBuildFile; fileRef = " + fileID + " /* " + name + " */; };\n";
+						context.ADDL_PBX_RESOURCES_BUILD_PHASE += "                " + buildFileID + " /* " + name + " in Resources */,\n";
+						context.ADDL_PBX_RESOURCE_GROUP += "                " + fileID + " /* " + name + " */,\n";
+					case "wrapper.framework", "wrapper.xcframework", "sourcecode.text-based-dylib-definition":
+						context.ADDL_PBX_BUILD_FILE += "        " + buildFileID + " /* " + name + " in Frameworks */ = {isa = PBXBuildFile; fileRef = " + fileID + " /* " + name + " */; };\n";
+						context.ADDL_PBX_FRAMEWORKS_BUILD_PHASE += "                " + buildFileID + " /* " + name + " in Frameworks */,\n";
+						context.ADDL_PBX_FRAMEWORK_GROUP += "                " + fileID + " /* " + name + " */,\n";
 
-				context.ADDL_PBX_BUILD_FILE += "		" + frameworkID + " /* " + name + " in Frameworks */ = {isa = PBXBuildFile; fileRef = " + fileID + " /* "
-					+ name + " */; };\n";
-				context.ADDL_PBX_FILE_REFERENCE += "		" + fileID + " /* " + name + " */ = {isa = PBXFileReference; lastKnownFileType = \"" + fileType
-					+ "\"; name = \"" + name + "\"; path = \"" + path + "\"; sourceTree = SDKROOT; };\n";
-				context.ADDL_PBX_FRAMEWORKS_BUILD_PHASE += "				" + frameworkID + " /* " + name + " in Frameworks */,\n";
-				context.ADDL_PBX_FRAMEWORK_GROUP += "				" + fileID + " /* " + name + " */,\n";
+						ArrayTools.addUnique(context.frameworkSearchPaths, Path.directory(path));
+				}
+
+				context.ADDL_PBX_FILE_REFERENCE += "        " + fileID + " /* " + name + " */ = {isa = PBXFileReference; lastKnownFileType = \"" + fileType + "\"; name = \"" + name + "\"; path = \"" + path + "\"; sourceTree = SDKROOT; };\n";
 			}
 		}
 
@@ -449,9 +475,7 @@ class IOSPlatform extends PlatformTarget
 			context.HAXELIB_PATH = '';
 		}
 
-		context.CATEGORY_TYPE = project.config.getString("ios.category_type", "public.app-category.entertainment");
-		
-		context.SHARE_FILES = project.haxedefs.exists("SHARE_MOBILE_FILES");
+		context.IOS_INFO_PLIST_CHILDREN = project.config.get("ios.info-plist-children");
 
 		return context;
 	}
@@ -483,20 +507,22 @@ class IOSPlatform extends PlatformTarget
 
 	public override function rebuild():Void
 	{
+		var armv6 = (project.architectures.indexOf(Architecture.ARMV6) > -1 && !project.targetFlags.exists("simulator"));
 		var armv7 = (project.architectures.indexOf(Architecture.ARMV7) > -1 && !project.targetFlags.exists("simulator"));
 		var armv7s = (project.architectures.indexOf(Architecture.ARMV7S) > -1 && !project.targetFlags.exists("simulator"));
-		var arm64 = (command == "rebuild"
-			|| (project.architectures.indexOf(Architecture.ARM64) > -1 && !project.targetFlags.exists("simulator")));
+		var arm64 = (command == "rebuild" || (project.architectures.indexOf(Architecture.ARM64) > -1));
 		var i386 = (project.architectures.indexOf(Architecture.X86) > -1 && project.targetFlags.exists("simulator"));
-		var x86_64 = (command == "rebuild" || project.targetFlags.exists("simulator"));
+		var x86_64 = (command == "rebuild" || project.architectures.indexOf(Architecture.X64) > -1 && project.targetFlags.exists("simulator"));
 
 		var arc = (project.targetFlags.exists("arc"));
 
 		var commands = [];
 
+		if (armv6) commands.push(["-Dios", "-DHXCPP_ARMV6"]);
 		if (armv7) commands.push(["-Dios", "-DHXCPP_ARMV7"]);
 		if (armv7s) commands.push(["-Dios", "-DHXCPP_ARMV7S"]);
 		if (arm64) commands.push(["-Dios", "-DHXCPP_ARM64"]);
+		if (arm64 && project.targetFlags.exists("simulator")) commands.push(["-Dios", "-Dsimulator", "-DHXCPP_ARM64"]);
 		if (i386) commands.push(["-Dios", "-Dsimulator", "-DHXCPP_M32"]);
 		if (x86_64) commands.push(["-Dios", "-Dsimulator", "-DHXCPP_M64"]);
 
@@ -794,25 +820,37 @@ class IOSPlatform extends PlatformTarget
 
 		System.mkdir(projectDirectory + "/lib");
 
-		for (archID in 0...5)
+		for (archID in 0...7)
 		{
-			var arch = ["armv7", "armv7s", "arm64", "i386", "x86_64"][archID];
+			var arch = ["armv6", "armv7", "armv7s", "arm64", "i386", "x86_64", "arm64-sim"][archID];
+			var arm64Device:Bool = context.ARM64 && !project.targetFlags.exists("simulator");
+			var arm64Sim:Bool = context.ARM64 && project.targetFlags.exists("simulator");
+
+			if (arch == "armv6" && !context.ARMV6) continue;
 
 			if (arch == "armv7" && !context.ARMV7) continue;
 
 			if (arch == "armv7s" && !context.ARMV7S) continue;
 
-			if (arch == "arm64" && !context.ARM64) continue;
+			if (arch == "arm64" && !arm64Device) continue;
 
 			if (arch == "i386" && !context.I386) continue;
 
+			if (arch == "x86_64" && context.ARM64 && !context.X86_64) continue;
+
+			if (arch == "arm64-sim" && !arm64Sim) continue;
+
 			var libExt = [
+				".iphoneos.a",
 				".iphoneos-v7.a",
 				".iphoneos-v7s.a",
 				".iphoneos-64.a",
 				".iphonesim.a",
-				".iphonesim-64.a"
+				".iphonesim-64.a",
+				".iphonesim-arm64.a",
 			][archID];
+
+			if (arch == 'arm64-sim') arch = 'arm64';
 
 			System.mkdir(projectDirectory + "/lib/" + arch);
 			System.mkdir(projectDirectory + "/lib/" + arch + "-debug");
@@ -866,20 +904,24 @@ class IOSPlatform extends PlatformTarget
 
 		for (asset in project.assets)
 		{
-			if (asset.embed != true)
+			if (asset.type != AssetType.TEMPLATE)
 			{
-				if (asset.type != AssetType.TEMPLATE)
-				{
-					var targetPath = Path.combine(projectDirectory + "/assets/", asset.resourceName);
-					System.mkdir(Path.directory(targetPath));
-					AssetHelper.copyAssetIfNewer(asset, targetPath);
-				}
-				else
-				{
-					var targetPath = Path.combine(projectDirectory, asset.targetPath);
-					System.mkdir(Path.directory(targetPath));
-					AssetHelper.copyAsset(asset, targetPath, context);
-				}
+				var targetPath = Path.combine(projectDirectory + "/assets/", asset.resourceName);
+
+				// var sourceAssetPath:String = projectDirectory + "haxe/" + asset.sourcePath;
+
+				System.mkdir(Path.directory(targetPath));
+				AssetHelper.copyAssetIfNewer(asset, targetPath);
+
+				// System.mkdir (Path.directory (sourceAssetPath));
+				// System.linkFile (flatAssetPath, sourceAssetPath, true, true);
+			}
+			else
+			{
+				var targetPath = Path.combine(projectDirectory, asset.targetPath);
+
+				System.mkdir(Path.directory(targetPath));
+				AssetHelper.copyAsset(asset, targetPath, context);
 			}
 		}
 

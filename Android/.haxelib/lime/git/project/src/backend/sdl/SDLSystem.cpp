@@ -35,10 +35,10 @@
 #include <SDL.h>
 #include <string>
 
-#ifdef HX_WINDOWS
 #include <locale>
 #include <codecvt>
-#endif
+
+using wstring_convert = std::wstring_convert<std::codecvt_utf8<wchar_t>>;
 
 
 namespace lime {
@@ -107,13 +107,15 @@ namespace lime {
 			case APPLICATION: {
 
 				char* path = SDL_GetBasePath ();
-				#ifdef HX_WINDOWS
-				std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-				result = new std::wstring (converter.from_bytes(path));
-				#else
-				result = new std::wstring (path, path + strlen (path));
-				#endif
-				SDL_free (path);
+
+				if (path != nullptr) {
+
+					wstring_convert converter;
+					result = new std::wstring (converter.from_bytes(path));
+					SDL_free (path);
+
+				}
+
 				break;
 
 			}
@@ -121,13 +123,14 @@ namespace lime {
 			case APPLICATION_STORAGE: {
 
 				char* path = SDL_GetPrefPath (company, title);
-				#ifdef HX_WINDOWS
-				std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-				result = new std::wstring (converter.from_bytes(path));
-				#else
-				result = new std::wstring (path, path + strlen (path));
-				#endif
-				SDL_free (path);
+
+				if (path != nullptr) {
+
+					wstring_convert converter;
+					result = new std::wstring (converter.from_bytes(path));
+					SDL_free (path);
+				}
+
 				break;
 
 			}
@@ -155,16 +158,15 @@ namespace lime {
 
 				char const* home = getenv ("HOME");
 
-				if (home == NULL) {
+				if (home != NULL) {
 
-					return 0;
+					std::string path = std::string (home) + std::string ("/Desktop");
+					wstring_convert converter;
+					result = new std::wstring (converter.from_bytes(path));
 
 				}
-
-				std::string path = std::string (home) + std::string ("/Desktop");
-				result = new std::wstring (path.begin (), path.end ());
-
 				#endif
+
 				break;
 
 			}
@@ -199,7 +201,8 @@ namespace lime {
 				if (home != NULL) {
 
 					std::string path = std::string (home) + std::string ("/Documents");
-					result = new std::wstring (path.begin (), path.end ());
+					wstring_convert converter;
+					result = new std::wstring (converter.from_bytes(path));
 
 				}
 
@@ -277,7 +280,8 @@ namespace lime {
 				if (home != NULL) {
 
 					std::string path = std::string (home);
-					result = new std::wstring (path.begin (), path.end ());
+					wstring_convert converter;
+					result = new std::wstring (converter.from_bytes(path));
 
 				}
 
@@ -577,6 +581,18 @@ namespace lime {
 
 	}
 
+	double System::GetPerformanceCounter () {
+
+		return SDL_GetPerformanceCounter ();
+
+	}
+
+	double System::GetPerformanceFrequency () {
+
+		return SDL_GetPerformanceFrequency ();
+
+	}
+
 
 	bool System::SetAllowScreenTimeout (bool allow) {
 
@@ -593,6 +609,49 @@ namespace lime {
 		return allow;
 
 	}
+
+	int System::GetDisplayOrientation(int displayIndex) {
+		int orientation = 0;
+		switch(SDL_GetDisplayOrientation(displayIndex)) {
+			case SDL_ORIENTATION_UNKNOWN:
+				orientation = 0;
+				break;
+			case SDL_ORIENTATION_LANDSCAPE:
+				orientation = 1;
+				break;
+			case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
+				orientation = 2;
+				break;
+			case SDL_ORIENTATION_PORTRAIT:
+				orientation = 3;
+				break;
+			case SDL_ORIENTATION_PORTRAIT_FLIPPED:
+				orientation = 4;
+				break;
+		}
+
+		return orientation;
+	}
+
+	std::wstring* System::GetHint (const char* key) {
+		std::string hintKey(key);
+
+    if (hintKey.rfind("SDL_", 0) != 0) {
+			hintKey = "SDL_" + hintKey;
+    }
+
+    SDL_GetHint(hintKey.c_str());
+
+		const char* raw = SDL_GetHint(hintKey.c_str());
+		if (!raw) {
+			return nullptr;
+		}
+
+		std::string hint = std::string (raw);
+		std::wstring* _hint = new std::wstring (hint.begin (), hint.end ());
+		return _hint;
+	}
+
 
 
 	FILE* FILE_HANDLE::getFile () {

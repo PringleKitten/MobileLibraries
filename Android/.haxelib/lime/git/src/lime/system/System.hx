@@ -35,9 +35,9 @@ import sys.io.Process;
 @:access(lime._internal.backend.native.NativeCFFI)
 @:access(lime.system.Display)
 @:access(lime.system.DisplayMode)
-#if (cpp && windows && !HXCPP_MINGW && !lime_disable_gpu_hint)
+#if (cpp && windows && !lime_disable_gpu_hint)
 @:cppFileCode('
-#if defined(HX_WINDOWS)
+#if defined(HX_WINDOWS) && !defined(__MINGW32__)
 extern "C" {
 	_declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
 	_declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
@@ -222,6 +222,18 @@ class System
 	#end
 
 	/**
+		Returns the display orientation with the specified ID.
+	**/
+	public static function getDisplayOrientation(id:Int):DisplayOrientation
+	{
+		#if (lime_cffi && !macro)
+		return NativeCFFI.lime_system_get_display_orientation(id);
+		#else
+		return DISPLAY_ORIENTATION_UNKNOWN;
+		#end
+	}
+
+	/**
 		Returns information about the video display with the specified ID.
 	**/
 	public static function getDisplay(id:Int):Display
@@ -396,6 +408,24 @@ class System
 		#end
 	}
 
+	public static function getPerformanceCounter():Float
+	{
+		#if (lime_cffi && !macro)
+		return cast NativeCFFI.lime_system_get_performance_counter();
+		#else
+		return 0;
+		#end
+	}
+
+	public static function getPerformanceFrequency():Float
+	{
+		#if (lime_cffi && !macro)
+		return cast NativeCFFI.lime_system_get_performance_frequency();
+		#else
+		return 0;
+		#end
+	}
+
 	#if (!lime_doc_gen || lime_cffi)
 	public static inline function load(library:String, method:String, args:Int = 0, lazy:Bool = false):Dynamic
 	{
@@ -455,6 +485,22 @@ class System
 			NativeCFFI.lime_system_open_url(url, target);
 			#end
 		}
+	}
+
+	public static function getHint(key:String):String
+	{
+		if (key != null)
+		{
+			#if (lime_cffi && !macro)
+			#if (ios || tvos)
+			return NativeCFFI.lime_system_get_hint(key);
+			#else
+			return CFFI.stringValue(NativeCFFI.lime_system_get_hint(key));
+			#end
+			#end
+		}
+
+		return null;
 	}
 
 	@:noCompletion private static function __copyMissingFields(target:Dynamic, source:Dynamic):Void
@@ -938,6 +984,15 @@ class System
 
 		return __userDirectory;
 	}
+}
+
+#if (haxe_ver >= 4.0) enum #else @:enum #end abstract DisplayOrientation(Int) from Int to Int from UInt to UInt
+{
+	var DISPLAY_ORIENTATION_UNKNOWN = 0;
+	var DISPLAY_ORIENTATION_LANDSCAPE = 1;
+	var DISPLAY_ORIENTATION_LANDSCAPE_FLIPPED = 2;
+	var DISPLAY_ORIENTATION_PORTRAIT = 3;
+	var DISPLAY_ORIENTATION_PORTRAIT_FLIPPED = 4;
 }
 
 #if (haxe_ver >= 4.0) private enum #else @:enum private #end abstract SystemDirectory(Int) from Int to Int from UInt to UInt

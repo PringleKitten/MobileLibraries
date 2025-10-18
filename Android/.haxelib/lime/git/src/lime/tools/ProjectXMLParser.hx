@@ -128,7 +128,7 @@ class ProjectXMLParser extends HXProject
 		{
 			defines.set("native", "1");
 
-			if (target == Platform.WINDOWS)
+			if (target == Platform.WINDOWS && targetFlags.exists("mingw"))
 			{
 				defines.set("targetType", "cpp");
 				defines.set("cpp", "1");
@@ -849,7 +849,7 @@ class ProjectXMLParser extends HXProject
 		{
 			switch (attribute)
 			{
-				case "title", "description", "package", "version", "company", "company-id", "build-number", "company-url":
+				case "title", "description", "package", "version", "company", "company-id", "build-number", "company-url", "copyright-years":
 					var value = substitute(element.att.resolve(attribute));
 
 					defines.set("APP_" + StringTools.replace(attribute, "-", "_").toUpperCase(), value);
@@ -1809,6 +1809,15 @@ class ProjectXMLParser extends HXProject
 									{
 										config.push("android.permission", value);
 									}
+
+							case "gradle-maven-repositories":
+								var repositories = config.getArrayString("android.gradle-maven-repositories");
+
+								if (repositories == null || repositories.indexOf(value) == -1)
+								{
+									config.push("android.gradle-maven-repositories", value);
+								}
+
 
 								case "gradle-version":
 									config.set("android.gradle-version", value);

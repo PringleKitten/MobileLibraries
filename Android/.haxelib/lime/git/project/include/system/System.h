@@ -38,6 +38,7 @@ namespace lime {
 			#ifdef IPHONE
 			static std::wstring* GetIOSDirectory (SystemDirectory type);
 			static bool GetIOSTablet ();
+			static void showIOSAlert (const char* message, const char* title);
 			#endif
 			static int GetNumDisplays ();
 			static int GetDeviceOrientation ();
@@ -45,12 +46,16 @@ namespace lime {
 			static std::wstring* GetPlatformName ();
 			static std::wstring* GetPlatformVersion ();
 			static double GetTimer ();
+			static double GetPerformanceCounter ();
+			static double GetPerformanceFrequency ();
 			#if defined(HX_WINDOWS) && !defined (HX_WINRT)
 			static int GetWindowsConsoleMode (int handleType);
 			#endif
 			static void OpenFile (const char* path);
 			static void OpenURL (const char* url, const char* target);
 			static bool SetAllowScreenTimeout (bool allow);
+			static int GetDisplayOrientation (int displayIndex);
+			static std::wstring* GetHint (const char* key);
 			#if defined(HX_WINDOWS) && !defined (HX_WINRT)
 			static bool SetWindowsConsoleMode (int handleType, int mode);
 			#endif
@@ -94,7 +99,7 @@ namespace lime {
 #include <stdint.h>
 #else
 
-
+#ifdef _MSC_VER
 // ISO C9x  compliant stdint.h for Microsoft Visual Studio
 // Based on ISO/IEC 9899:TC2 Committee draft (May 6, 2005) WG14/N1124
 //
@@ -126,10 +131,6 @@ namespace lime {
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 ///////////////////////////////////////////////////////////////////////////////
-
-#ifndef _MSC_VER // [
-#error "Use this header only with Microsoft Visual C++ compilers!"
-#endif // _MSC_VER ]
 
 #ifndef _MSC_STDINT_H_ // [
 #define _MSC_STDINT_H_
@@ -354,6 +355,7 @@ typedef uint64_t  uintmax_t;
 #endif // _MSC_VER >= 1600 ]
 
 #endif // _MSC_STDINT_H_ ]
+#endif
 #endif
 
 

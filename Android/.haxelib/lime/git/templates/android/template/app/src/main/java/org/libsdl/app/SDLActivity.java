@@ -7,6 +7,8 @@ import java.util.Hashtable;
 import java.lang.reflect.Method;
 import java.lang.Math;
 
+import ::APP_PACKAGE::.R;
+
 import android.app.*;
 import android.content.*;
 import android.content.res.Configuration;
@@ -21,13 +23,13 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.ScrollView;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import android.os.*;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.SparseArray;
 import android.graphics.*;
 import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.hardware.*;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
@@ -215,7 +217,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         if (mBrokenLibraries)
         {
             mSingleton = this;
-            AlertDialog.Builder dlgAlert  = new AlertDialog.Builder(this);
+            Context dialogContext = new ContextThemeWrapper(this, R.style.LimeAppDialogTheme);
+            AlertDialog.Builder dlgAlert  = new AlertDialog.Builder(dialogContext);
             dlgAlert.setMessage("An error occurred while trying to start the application. Please try again and/or reinstall."
                   + System.getProperty("line.separator")
                   + System.getProperty("line.separator")
@@ -1344,7 +1347,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
 
         // create dialog with title and a listener to wake up calling thread
 
-        final MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(SDL.getContext());
+        Context dialogContext = new ContextThemeWrapper(SDL.getContext(), R.style.LimeAppDialogTheme);
+        final AlertDialog.Builder builder = new AlertDialog.Builder(dialogContext);
         builder.setTitle(args.getString("title"));
         builder.setMessage(args.getString("message"));
         builder.setCancelable(false);

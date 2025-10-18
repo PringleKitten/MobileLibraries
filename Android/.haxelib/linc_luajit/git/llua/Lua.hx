@@ -11,6 +11,9 @@ import llua.Convert;
 @:build(linc.Linc.touch())
 @:build(linc.Linc.xml('lua'))
 #end
+// #if (lime && flixel && (!NO_PRECOMPILED_HEADERS || SHUT_UP_LINC_LUAJIT))
+// #trace "\nlinc_luajit might require `NO_PRECOMPILED_HEADERS` to be set in your project.xml\nThis error is to help anyone compiling certain FNF engines that don't have this set already\nONLY IF YOU KNOW WHAT YOU'RE DOING, add '<haxedef name=\"SHUT_UP_LINC_LUAJIT\"/>' to your project.xml\n\nTO FIX: Add '<haxedef name=\"NO_PRECOMPILED_HEADERS\"/>' to your project.xml right before '</project>'." 
+// #end
 extern class Lua {
 
 	@:native('lua_upvalueindex')
@@ -221,7 +224,7 @@ extern class Lua {
 	// static function pushfstring(l:State, fmt:String, ...) : Void;
 
 	@:native('linc::lua::pushcclosure')
-	static function pushcclosure(l:State, fn:cpp.Callable<StatePointer>, n:Int) : Void;
+	static function pushcclosure(l:State, fn:cpp.Callable<StatePointer->Int>, n:Int) : Void;
 
 
 	@:noCompletion
@@ -497,8 +500,7 @@ extern class Lua {
 	@:native('linc::lua::versionJIT')
 	static function versionJIT() : String;
 
-	static inline function init_callbacks(l:State) : Void {
-
+	static inline function init_callbacks(?l:State) : Void {
 		Lua.set_callbacks_function(cpp.Callable.fromStaticFunction(Lua_helper.callback_handler));
 
 	}
@@ -565,7 +567,6 @@ class Lua_helper {
 	public static var sendErrorsToLua:Bool = true;
 	public static inline function callback_handler(l:State, fname:String):Int {
 		try{
-
 			var cbf = callbacks.get(fname);
 
 			if(cbf == null) return 0;

@@ -2,6 +2,7 @@ package org.haxe.lime;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.ClipData;
 import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.pm.ApplicationInfo;
@@ -15,8 +16,13 @@ import android.webkit.MimeTypeMap;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import org.haxe.extension.Extension;
 import org.haxe.lime.HaxeObject;
@@ -53,8 +59,9 @@ public class FileDialog extends Extension
 {
 	public static final String LOG_TAG = "FileDialog";
 	private static final int OPEN_REQUEST_CODE = 990;
-	private static final int SAVE_REQUEST_CODE = 995;
-	private static final int DOCUMENT_TREE_REQUEST_CODE = 999;
+	private static final int OPEN_MULTIPLE_REQUEST_CODE = 995;
+	private static final int SAVE_REQUEST_CODE = 999;
+	private static final int DOCUMENT_TREE_REQUEST_CODE = 1000;
 
 	public HaxeObject haxeObject;
 	public FileSaveCallback onFileSave = null;
@@ -79,27 +86,39 @@ public class FileDialog extends Extension
 
 		if (defaultPath != null)
 		{
-			Log.d(LOG_TAG, "setting open dialog inital path...");
+			//Log.d(LOG_TAG, "setting open dialog inital path...");
 			File file = new File(defaultPath);
 			if (file.exists())
 			{
 				Uri uri = Uri.fromFile(file);
 				intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, uri);
-				Log.d(LOG_TAG, "Set to " + uri.getPath() + "!");
+				//Log.d(LOG_TAG, "Set to " + uri.getPath() + "!");
 			}
 			else
 			{
-				Log.d(LOG_TAG, "Uh Oh the path doesn't exist :(");
+				//Log.d(LOG_TAG, "Uh Oh the path doesn't exist :(");
 			}
 		}
 
 		if (filter != null)
 		{
-			MimeTypeMap mimeType = MimeTypeMap.getSingleton();
-			String extension = formatExtension(filter);
-			String mime = mimeType.getMimeTypeFromExtension(extension);
-			Log.d(LOG_TAG, "Setting mime to " + mime);
-			intent.setType(mime);
+			if (filter.contains(","))
+			{
+				String[] filters = filter.split(",");
+
+				for (int i = 0; i < filters.length; i++)
+				{
+					filters[i] = getMimeFromExtension(filters[i]);
+				}
+
+				intent.setType(filters[0]);
+				intent.putExtra(Intent.EXTRA_MIME_TYPES, filters);
+			}
+			else
+			{
+				String mime = getMimeFromExtension(filter);
+				intent.setType(getMimeFromExtension(filter));
+			}
 		}
 		else
 		{
@@ -108,13 +127,71 @@ public class FileDialog extends Extension
 
 		if (title != null)
 		{
-			Log.d(LOG_TAG, "Setting title to " + title);
+			//Log.d(LOG_TAG, "Setting title to " + title);
 			intent.putExtra(Intent.EXTRA_TITLE, title);
 		}
 		
-		Log.d(LOG_TAG, "launching file picker (ACTION_OPEN_DOCUMENT) intent!");
+		//Log.d(LOG_TAG, "launching file picker (ACTION_OPEN_DOCUMENT) intent!");
 		awaitingResults = true;
 		mainActivity.startActivityForResult(intent, OPEN_REQUEST_CODE);
+	}
+
+	public void openMultiple(String filter, String defaultPath, String title)
+	{
+		Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+		intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+		intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+		if (defaultPath != null)
+		{
+			//Log.d(LOG_TAG, "setting open dialog inital path...");
+			File file = new File(defaultPath);
+			if (file.exists())
+			{
+				Uri uri = Uri.fromFile(file);
+				intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, uri);
+				//Log.d(LOG_TAG, "Set to " + uri.getPath() + "!");
+			}
+			else
+			{
+				//Log.d(LOG_TAG, "Uh Oh the path doesn't exist :(");
+			}
+		}
+
+		if (filter != null)
+		{
+			if (filter.contains(","))
+			{
+				String[] filters = filter.split(",");
+
+				for (int i = 0; i < filters.length; i++)
+				{
+					filters[i] = getMimeFromExtension(filters[i]);
+				}
+
+				intent.setType(filters[0]);
+				intent.putExtra(Intent.EXTRA_MIME_TYPES, filters);
+			}
+			else
+			{
+				String mime = getMimeFromExtension(filter);
+				intent.setType(getMimeFromExtension(filter));
+			}
+		}
+		else
+		{
+			intent.setType("*/*");
+		}
+
+		if (title != null)
+		{
+			//Log.d(LOG_TAG, "Setting title to " + title);
+			intent.putExtra(Intent.EXTRA_TITLE, title);
+		}
+		
+		//Log.d(LOG_TAG, "launching file picker (ACTION_OPEN_DOCUMENT) intent!");
+		awaitingResults = true;
+		mainActivity.startActivityForResult(intent, OPEN_MULTIPLE_REQUEST_CODE);
 	}
 
 	public void save(byte[] data, String mime, String defaultPath, String title)
@@ -124,23 +201,23 @@ public class FileDialog extends Extension
 
 		if (defaultPath != null)
 		{
-			Log.d(LOG_TAG, "setting save dialog inital path...");
+			//Log.d(LOG_TAG, "setting save dialog inital path...");
 			File file = new File(defaultPath);
 			if (file.exists())
 			{
 				Uri uri = Uri.fromFile(file);
 				intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, uri);
-				Log.d(LOG_TAG, "Set to " + uri.getPath() + "!");
+				//Log.d(LOG_TAG, "Set to " + uri.getPath() + "!");
 			}
 			else
 			{
-				Log.d(LOG_TAG, "Uh Oh the path doesn't exist :(");
+				//Log.d(LOG_TAG, "Uh Oh the path doesn't exist :(");
 			}
 		}
 
 		if (title != null)
 		{
-			Log.d(LOG_TAG, "Setting title to " + title);
+			//Log.d(LOG_TAG, "Setting title to " + title);
 			intent.putExtra(Intent.EXTRA_TITLE, title);
 		}
 
@@ -151,7 +228,7 @@ public class FileDialog extends Extension
         		@Override
         		public void execute(Uri uri)
 				{
-					Log.d(LOG_TAG, "Saving File to " + uri.toString());
+					//Log.d(LOG_TAG, "Saving File to " + uri.toString());
 					writeBytesToFile(uri, data);
         	    }
         	};
@@ -161,9 +238,11 @@ public class FileDialog extends Extension
 			Log.w(LOG_TAG, "No bytes data were passed to `save`, no bytes will be written to it.");
 		}
 		
-		Log.d(LOG_TAG, "launching file saver (ACTION_CREATE_DOCUMENT) intent!");
+		//Log.d(LOG_TAG, "launching file saver (ACTION_CREATE_DOCUMENT) intent!");
 		awaitingResults = true;
 		
+		if (mime == "application/octet-stream")
+			mime = "*/*";
 		intent.setType(mime);
 		mainActivity.startActivityForResult(intent, SAVE_REQUEST_CODE);
 	}
@@ -175,21 +254,21 @@ public class FileDialog extends Extension
 	
 		if (defaultPath != null)
 		{
-			Log.d(LOG_TAG, "setting document tree dialog inital path...");
+			//Log.d(LOG_TAG, "setting document tree dialog inital path...");
 			File file = new File(defaultPath);
 			if (file.exists())
 			{
 				Uri uri = Uri.fromFile(file);
 				intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, uri);
-				Log.d(LOG_TAG, "Set to " + uri.getPath() + "!");
+				//Log.d(LOG_TAG, "Set to " + uri.getPath() + "!");
 			}
 			else
 			{
-				Log.d(LOG_TAG, "Uh Oh the path doesn't exist :(");
+				//Log.d(LOG_TAG, "Uh Oh the path doesn't exist :(");
 			}
 		}
 
-		Log.d(LOG_TAG, "launching directory picker (ACTION_OPEN_DOCUMENT_TREE) intent!");
+		//Log.d(LOG_TAG, "launching directory picker (ACTION_OPEN_DOCUMENT_TREE) intent!");
 		awaitingResults = true;
         mainActivity.startActivityForResult(intent, DOCUMENT_TREE_REQUEST_CODE);
     }
@@ -202,47 +281,64 @@ public class FileDialog extends Extension
 	@Override
 	public boolean onActivityResult(int requestCode, int resultCode, Intent data)
 	{
+		String uri = null;
+		String path = null;
+		// byte[] bytesData = null;
+
 		if (haxeObject != null && awaitingResults)
 		{
-			String uri = null;
-			byte[] bytesData = null;
-
-			if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null)
+			if (resultCode == Activity.RESULT_OK && data != null)
 			{
-				uri = data.getData().toString();
 				switch (requestCode)
 				{
 					case OPEN_REQUEST_CODE:
 						try
 						{
-							Log.d(LOG_TAG, "getting file bytes from uri " + uri);
-							bytesData = getFileBytes(data.getData());
+							// Log.d(LOG_TAG, "Grabbing URI bytes: " + uri);
+							// bytesData = getFileBytes(data.getData());
+							path = copyURIToCache(data.getData());
 						}
 						catch (IOException e)
 						{
-							Log.e(LOG_TAG, "Failed to get file bytes\n" + e.getMessage());
+							Log.e(LOG_TAG, "Failed to copy file to cache:" + e.getMessage());
+						}
+						break;
+					case OPEN_MULTIPLE_REQUEST_CODE:
+						try
+						{
+							if (data.getClipData() != null)
+							{
+                				ClipData clipData = data.getClipData();
+								List<String> pathsList = new ArrayList<>();
+                				for (int i = 0; i < clipData.getItemCount(); i++) {
+                    				Uri fileUri = clipData.getItemAt(i).getUri();
+									pathsList.add(copyURIToCache(fileUri));
+	                			}
+								path = String.join(",", pathsList);
+							}
+							else if (data.getData() != null)
+							{
+								path = copyURIToCache(data.getData());
+							}
+						}
+						catch (IOException e)
+						{
+							Log.e(LOG_TAG, "Failed to copy file to cache:" + e.getMessage());
 						}
 						break;
 					case SAVE_REQUEST_CODE:
-						if (onFileSave != null)
+						if (onFileSave != null && data.getData() != null)
 						{
 							onFileSave.execute(data.getData());
 							onFileSave = null;
 						}
 						break;
 					case DOCUMENT_TREE_REQUEST_CODE:
-						Log.d(LOG_TAG, "Got directory tree uri " + uri.toString());
+						//Log.d(LOG_TAG, "Got directory tree uri:" + uri.toString());
 						break;
 					default:
 						break;
 				}
-				Object[] args = new Object[5];
-				args[0] = requestCode;
-				args[1] = resultCode;
-				args[2] = uri;
-				args[3] = data.getData().getPath();
-				args[4] = bytesData;
-				haxeObject.call("jni_activity_results", args); 
 			}
 			else
 			{
@@ -250,18 +346,33 @@ public class FileDialog extends Extension
 			}
 		}
 
+		Object[] args = new Object[4];
+		args[0] = requestCode;
+		args[1] = resultCode;
+		if (data.getData() == null)
+			args[2] = null;
+		else
+			args[2] = data.getData().toString();
+		if (path != null) {
+        	args[3] = path;
+    	} else if (data != null && data.getData() != null) {
+        	args[3] = data.getData().getPath();
+    	} else {
+      	  args[3] = null;
+    	}
+		//Log.d(LOG_TAG, "Dispatching activity results: " + uri);
+		haxeObject.call("onJNIActivityResult", args); 
+
 		awaitingResults = false;
 		return true;
 	}
 
 	public static String formatExtension(String extension)
 	{
-		if (extension.startsWith("*")) {
+		if (extension.startsWith("*") || extension.startsWith(".")) {
 			extension = extension.substring(1);
 		}
-		if (extension.startsWith(".")) {
-			extension = extension.substring(1);
-		}
+
 		return extension;
 	}
 
@@ -273,17 +384,9 @@ public class FileDialog extends Extension
 
     	try 
 		{
-    	    // Open a file descriptor for the file URI
     	    parcelFileDescriptor = contentResolver.openFileDescriptor(fileUri, "r");
-    	    if (parcelFileDescriptor == null) 
-			{
-    	        throw new IOException("Failed to open file descriptor for URI: " + fileUri);
-    	    }
-
-    	    // Create a FileInputStream from the file descriptor
     	    fileInputStream = new FileInputStream(parcelFileDescriptor.getFileDescriptor());
 
-    	    // Read the bytes into a byte array
     	    byte[] fileBytes = new byte[(int) parcelFileDescriptor.getStatSize()];
     	    fileInputStream.read(fileBytes);
 
@@ -293,7 +396,6 @@ public class FileDialog extends Extension
 		catch (IOException e)
 		{
 			Log.e(LOG_TAG, "Failed to get file bytes\n" + e.getMessage());
-			return new byte[0];
 		}
 		finally
 		{
@@ -308,6 +410,8 @@ public class FileDialog extends Extension
     	        parcelFileDescriptor.close();
     	    }
     	}
+
+		return new byte[0];
 	}
 
 	private static void writeBytesToFile(Uri uri, byte[] data)
@@ -329,6 +433,69 @@ public class FileDialog extends Extension
 		{
         	Log.e(LOG_TAG, "Failed to save file: " + e.getMessage());
     	}
+	}
+
+	public static String copyURIToCache(Uri uri) throws IOException
+	{
+		if (uri != null) {
+			String fileName = new File(uri.getPath()).getName();
+			if (fileName.contains(":"))
+				fileName = fileName.split(":")[1];
+        	File output = new File(mainContext.getCacheDir(), fileName);
+			Log.d(LOG_TAG, "Copying URI from '" + uri + "' to cache dir: " + output.getAbsolutePath());
+
+			if (output.exists())
+			{
+				output.delete();
+				Log.d(LOG_TAG, "deleting existing copy of: " + output.getAbsolutePath());
+			}
+
+    		ParcelFileDescriptor parcelFileDescriptor = null;
+			FileInputStream fileInputStream = null;
+			OutputStream out = null;
+
+        	try {
+	    	    parcelFileDescriptor = mainContext.getContentResolver().openFileDescriptor(uri, "r");
+				fileInputStream = new FileInputStream(parcelFileDescriptor.getFileDescriptor());
+
+				byte[] fileBytes = new byte[(int) parcelFileDescriptor.getStatSize()];
+	    	    fileInputStream.read(fileBytes);
+				
+				out = new FileOutputStream(output);
+				out.write(fileBytes);
+        	}
+        	catch (IOException e) {
+            	Log.e(LOG_TAG, e.getMessage());
+        	}
+			finally
+			{
+	    	    if (fileInputStream != null)
+				{
+    		        fileInputStream.close();
+    	    	}
+
+    	    	if (parcelFileDescriptor != null)
+				{
+    	        	parcelFileDescriptor.close();
+    	    	}
+
+				if (out != null)
+				{
+					out.close();
+				}
+    		}
+
+    		return output.getAbsolutePath();
+		}
+
+		return null;
+	}
+
+	public static String getMimeFromExtension(String extension)
+	{
+		MimeTypeMap mimeType = MimeTypeMap.getSingleton();
+		extension = formatExtension(extension);
+		return mimeType.getMimeTypeFromExtension(extension);
 	}
 }
 

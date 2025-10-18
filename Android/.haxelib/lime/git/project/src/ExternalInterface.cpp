@@ -25,6 +25,9 @@
 #include <system/Endian.h>
 #include <system/FileWatcher.h>
 #include <system/JNI.h>
+#ifdef __ANDROID__
+#include <system/DocumentSystem.h>
+#endif
 #include <system/Locale.h>
 #include <system/OrientationEvent.h>
 #include <system/SensorEvent.h>
@@ -131,6 +134,73 @@ namespace lime {
 
 		Window* window = (Window*)handle->ptr;
 		delete window;
+
+	}
+
+	std::string wstring_utf8 (const std::wstring& val) {
+
+		std::string out;
+		unsigned int codepoint = 0;
+
+		for (const wchar_t chr : val) {
+
+			if (chr >= 0xd800 && chr <= 0xdbff) {
+
+				codepoint = ((chr - 0xd800) << 10) + 0x10000;
+
+			} else {
+
+				if (chr >= 0xdc00 && chr <= 0xdfff) {
+
+					codepoint |= chr - 0xdc00;
+
+				} else {
+
+					codepoint = chr;
+
+				}
+
+				if (codepoint <= 0x7f) {
+
+					out.append (1, static_cast<char> (codepoint));
+
+				} else if (codepoint <= 0x7ff) {
+
+					out.append (1, static_cast<char> (0xc0 | ((codepoint >> 6) & 0x1f)));
+					out.append (1, static_cast<char> (0x80 | (codepoint & 0x3f)));
+
+				} else if (codepoint <= 0xffff) {
+
+					out.append (1, static_cast<char> (0xe0 | ((codepoint >> 12) & 0x0f)));
+					out.append (1, static_cast<char> (0x80 | ((codepoint >> 6) & 0x3f)));
+					out.append (1, static_cast<char> (0x80 | (codepoint & 0x3f)));
+
+				} else {
+
+					out.append (1, static_cast<char> (0xf0 | ((codepoint >> 18) & 0x07)));
+					out.append (1, static_cast<char> (0x80 | ((codepoint >> 12) & 0x3f)));
+					out.append (1, static_cast<char> (0x80 | ((codepoint >> 6) & 0x3f)));
+					out.append (1, static_cast<char> (0x80 | (codepoint & 0x3f)));
+
+				}
+
+				codepoint = 0;
+
+			}
+
+		}
+
+		return out;
+
+	}
+
+
+	vbyte* hl_wstring_to_utf8_bytes (const std::wstring& val) {
+
+		const std::string utf8 (wstring_utf8 (val));
+		vbyte* const bytes = hl_alloc_bytes (utf8.size () + 1);
+		std::memcpy(bytes, utf8.c_str (), utf8.size () + 1);
+		return bytes;
 
 	}
 
@@ -2220,6 +2290,119 @@ namespace lime {
 	}
 
 
+	void gc_documentsystem (value handle) {
+
+		#ifdef ANDROID
+		DocumentSystem* documentSystem = (DocumentSystem*)val_data (handle);
+		delete documentSystem;
+		#endif
+
+	}
+
+
+	value lime_documentsystem_create (HxString treeUri) {
+
+		#ifdef ANDROID
+		DocumentSystem* documentSystem = new DocumentSystem (hxs_utf8 (treeUri, nullptr));
+		return CFFIPointer (documentSystem, gc_documentsystem);
+		#else
+		return NULL;
+		#endif
+
+
+	}
+
+
+	void lime_documentsystem_write_bytes(value handle, HxString path, value bytes) {
+
+		#ifdef ANDROID
+		DocumentSystem* documentSystem = (DocumentSystem*)val_data (handle);
+		Bytes data (bytes);
+		documentSystem->writeBytes (hxs_utf8(path, nullptr), &data);
+		#endif
+
+	}
+
+
+	value lime_documentsystem_read_bytes(value handle, HxString path, value bytes) {
+
+		#ifdef ANDROID
+		DocumentSystem* documentSystem = (DocumentSystem*)val_data (handle);
+		Bytes data (bytes);
+		data.Set (documentSystem->readBytes (hxs_utf8(path, nullptr)));
+		return data.Value (bytes);
+		#else
+		return alloc_null ();
+		#endif
+
+	}
+
+	void lime_documentsystem_create_directory(value handle, HxString path) {
+
+		#ifdef ANDROID
+		DocumentSystem* documentSystem = (DocumentSystem*)val_data (handle);
+		documentSystem->createDirectory (hxs_utf8(path, nullptr));
+		#endif
+
+	}
+
+	value lime_documentsystem_read_directory(value handle, HxString path) {
+
+		#ifdef ANDROID
+		DocumentSystem* documentSystem = (DocumentSystem*)val_data (handle);
+		return documentSystem->readDirectory (hxs_utf8(path, nullptr));
+		#else
+		return alloc_null ();
+		#endif
+
+	}
+
+	bool lime_documentsystem_exists(value handle, HxString path) {
+
+		#ifdef ANDROID
+		DocumentSystem* documentSystem = (DocumentSystem*)val_data (handle);
+		return documentSystem->exists (hxs_utf8(path, nullptr));
+		#else
+		return false;
+		#endif
+
+	}
+
+
+	bool lime_documentsystem_delete_directory(value handle, HxString path) {
+
+		#ifdef ANDROID
+		DocumentSystem* documentSystem = (DocumentSystem*)val_data (handle);
+		return documentSystem->deleteDirectory (hxs_utf8(path, nullptr));
+		#else
+		return false;
+		#endif
+
+	}
+
+	bool lime_documentsystem_delete_file(value handle, HxString path) {
+
+		#ifdef ANDROID
+		DocumentSystem* documentSystem = (DocumentSystem*)val_data (handle);
+		return documentSystem->deleteFile (hxs_utf8(path, nullptr));
+		#else
+		return false;
+		#endif
+
+	}
+
+	bool lime_documentsystem_is_directory(value handle, HxString path) {
+
+		#ifdef ANDROID
+		DocumentSystem* documentSystem = (DocumentSystem*)val_data (handle);
+		return documentSystem->isDirectory (hxs_utf8(path, nullptr));
+		#else
+		return false;
+		#endif
+
+	}
+
+
 	void lime_joystick_event_manager_register (value callback, value eventObject) {
 
 		JoystickEvent::callback = new ValuePointer (callback);
@@ -3036,6 +3219,30 @@ namespace lime {
 
 	}
 
+	double lime_system_get_performance_counter () {
+
+		return System::GetPerformanceCounter ();
+
+	}
+
+	HL_PRIM double HL_NAME(hl_system_get_performance_counter) () {
+
+		return System::GetPerformanceCounter ();
+
+	}
+
+	double lime_system_get_performance_frequency () {
+
+		return System::GetPerformanceFrequency ();
+
+	}
+
+	HL_PRIM double HL_NAME(hl_system_get_performance_frequency) () {
+
+		return System::GetPerformanceFrequency ();
+
+	}
+
 
 	int lime_system_get_windows_console_mode (int handleType) {
 
@@ -3105,6 +3312,56 @@ namespace lime {
 	HL_PRIM bool HL_NAME(hl_system_set_allow_screen_timeout) (bool allow) {
 
 		return System::SetAllowScreenTimeout (allow);
+
+	}
+
+	int lime_system_get_display_orientation (int displayIndex) {
+
+		return System::GetDisplayOrientation (displayIndex);
+
+	}
+
+
+	HL_PRIM bool HL_NAME(hl_system_get_display_orientation) (int displayIndex) {
+
+		return System::GetDisplayOrientation (displayIndex);
+
+	}
+
+	value lime_system_get_hint (HxString hintKey) {
+
+		std::wstring* hint = System::GetHint (hxs_utf8 (hintKey, nullptr));
+
+		if (hint) {
+
+			value result = alloc_wstring (hint->c_str ());
+			delete hint;
+			return result;
+
+		} else {
+
+			return alloc_null ();
+
+		}
+
+	}
+
+	HL_PRIM vbyte* HL_NAME(hl_system_get_hint) (vbyte* key) {
+
+		#ifndef EMSCRIPTEN
+
+		std::wstring* hint = System::GetHint ((char*)key);
+
+		if (hint) {
+
+			vbyte* const result = hl_wstring_to_utf8_bytes (*hint);
+			delete hint;
+			return result;
+		}
+
+		#endif
+
+		return 0;
 
 	}
 
@@ -4072,10 +4329,14 @@ namespace lime {
 	DEFINE_PRIME0 (lime_system_get_platform_name);
 	DEFINE_PRIME0 (lime_system_get_platform_version);
 	DEFINE_PRIME0 (lime_system_get_timer);
+	DEFINE_PRIME0 (lime_system_get_performance_counter);
+	DEFINE_PRIME0 (lime_system_get_performance_frequency);
 	DEFINE_PRIME1 (lime_system_get_windows_console_mode);
 	DEFINE_PRIME1v (lime_system_open_file);
 	DEFINE_PRIME2v (lime_system_open_url);
 	DEFINE_PRIME1 (lime_system_set_allow_screen_timeout);
+	DEFINE_PRIME1 (lime_system_get_display_orientation);
+	DEFINE_PRIME1 (lime_system_get_hint);
 	DEFINE_PRIME2 (lime_system_set_windows_console_mode);
 	DEFINE_PRIME2v (lime_text_event_manager_register);
 	DEFINE_PRIME2v (lime_touch_event_manager_register);
@@ -4231,6 +4492,15 @@ namespace lime {
 	DEFINE_HL_PRIM (_TIMAGEBUFFER, hl_image_load_bytes, _TBYTES _TIMAGEBUFFER);
 	DEFINE_HL_PRIM (_TIMAGEBUFFER, hl_image_load_file, _STRING _TIMAGEBUFFER);
 	DEFINE_HL_PRIM (_F64, hl_jni_getenv, _NO_ARG);
+	DEFINE_PRIME1 (lime_documentsystem_create);
+	DEFINE_PRIME3v (lime_documentsystem_write_bytes);
+	DEFINE_PRIME3 (lime_documentsystem_read_bytes);
+	DEFINE_PRIME2v (lime_documentsystem_create_directory);
+	DEFINE_PRIME2 (lime_documentsystem_read_directory);
+	DEFINE_PRIME2 (lime_documentsystem_exists);
+	DEFINE_PRIME2 (lime_documentsystem_delete_directory);
+	DEFINE_PRIME2 (lime_documentsystem_delete_file);
+	DEFINE_PRIME2 (lime_documentsystem_is_directory);
 	DEFINE_HL_PRIM (_VOID, hl_joystick_event_manager_register, _FUN(_VOID, _NO_ARG) _TJOYSTICK_EVENT);
 	DEFINE_HL_PRIM (_BYTES, hl_joystick_get_device_guid, _I32);
 	DEFINE_HL_PRIM (_BYTES, hl_joystick_get_device_name, _I32);
@@ -4265,10 +4535,14 @@ namespace lime {
 	DEFINE_HL_PRIM (_BYTES, hl_system_get_platform_name, _NO_ARG);
 	DEFINE_HL_PRIM (_BYTES, hl_system_get_platform_version, _NO_ARG);
 	DEFINE_HL_PRIM (_F64, hl_system_get_timer, _NO_ARG);
+	DEFINE_HL_PRIM (_F64, hl_system_get_performance_counter, _NO_ARG);
+	DEFINE_HL_PRIM (_F64, hl_system_get_performance_frequency, _NO_ARG);
 	DEFINE_HL_PRIM (_I32, hl_system_get_windows_console_mode, _I32);
 	DEFINE_HL_PRIM (_VOID, hl_system_open_file, _STRING);
 	DEFINE_HL_PRIM (_VOID, hl_system_open_url, _STRING _STRING);
 	DEFINE_HL_PRIM (_BOOL, hl_system_set_allow_screen_timeout, _BOOL);
+	DEFINE_HL_PRIM (_I32, hl_system_get_display_orientation, _I32);
+	DEFINE_HL_PRIM (_VOID, hl_system_get_hint, _STRING);
 	DEFINE_HL_PRIM (_BOOL, hl_system_set_windows_console_mode, _I32 _I32);
 	DEFINE_HL_PRIM (_VOID, hl_text_event_manager_register, _FUN (_VOID, _NO_ARG) _TTEXT_EVENT);
 	DEFINE_HL_PRIM (_VOID, hl_touch_event_manager_register, _FUN (_VOID, _NO_ARG) _TTOUCH_EVENT);

@@ -497,16 +497,14 @@ class CommandLineTools
 
 			case LINUX:
 				var arguments = Sys.args();
-				var raspberryPi = false;
 
-				for (argument in arguments)
+				if (System.hostArchitecture == ARMV7)
 				{
-					if (argument == "-rpi") raspberryPi = true;
+					untyped $loader.path = $array(path + "LinuxArm/", $loader.path);
 				}
-
-				if (raspberryPi || System.hostArchitecture == ARMV6 || System.hostArchitecture == ARMV7)
+				else if (System.hostArchitecture == ARM64)
 				{
-					untyped $loader.path = $array(path + "RPi/", $loader.path);
+					untyped $loader.path = $array(path + "LinuxArm64/", $loader.path);
 				}
 				else if (System.hostArchitecture == X64)
 				{
@@ -1803,6 +1801,14 @@ class CommandLineTools
 					}
 
 					args.push("-notoolscheck");
+
+					// Backport commit 95e6339 by @joshtynjala from the official lime repository
+					var projectDirectory = Path.directory(projectFile);
+					var localRepository = Path.combine(projectDirectory, ".haxelib");
+					if (FileSystem.exists(localRepository) && FileSystem.isDirectory(localRepository) && StringTools.startsWith(path, localRepository))
+					{
+						args.push("-nolocalrepocheck");
+					}
 
 					Sys.setCwd(path);
 					var args = [Path.combine(path, "run.n")].concat(args);

@@ -2,6 +2,7 @@ package lime.media.openal;
 
 #if (!lime_doc_gen || lime_openal)
 import lime._internal.backend.native.NativeCFFI;
+import lime.system.CFFI;
 import lime.system.CFFIPointer;
 
 #if !lime_debug
@@ -32,6 +33,13 @@ class ALC
 	public static inline var ENUMERATE_ALL_EXT:Int = 1;
 	public static inline var DEFAULT_ALL_DEVICES_SPECIFIER:Int = 0x1012;
 	public static inline var ALL_DEVICES_SPECIFIER:Int = 0x1013;
+	public static inline var PLAYBACK_DEVICE_SOFT:Int = 0x19D4;
+	public static inline var CAPTURE_DEVICE_SOFT:Int = 0x19D5;
+	public static inline var EVENT_TYPE_DEFAULT_DEVICE_CHANGED_SOFT:Int = 0x19D6;
+	public static inline var EVENT_TYPE_DEVICE_ADDED_SOFT:Int = 0x19D7;
+	public static inline var EVENT_TYPE_DEVICE_REMOVED_SOFT:Int = 0x19D8;
+	public static inline var EVENT_SUPPORTED_SOFT:Int = 0x19D9;
+	public static inline var EVENT_NOT_SUPPORTED_SOFT:Int = 0x19DA;
 
 	public static function closeDevice(device:ALDevice):Bool
 	{
@@ -75,12 +83,13 @@ class ALC
 
 	public static function getContextsDevice(context:ALContext):ALDevice
 	{
-		#if (lime_cffi && lime_openal && !macro) #if !hl var handle:Dynamic = NativeCFFI.lime_alc_get_contexts_device(context);
+		#if (lime_cffi && lime_openal && !macro)
+		var handle:Dynamic = NativeCFFI.lime_alc_get_contexts_device(context);
 
 		if (handle != null)
 		{
 			return new ALDevice(handle);
-		} #else #end
+		}
 		#end
 
 		return null;
@@ -144,10 +153,7 @@ class ALC
 	{
 		#if (lime_cffi && lime_openal && !macro)
 		var result = NativeCFFI.lime_alc_get_string(device, param);
-		#if hl
-		var result = @:privateAccess String.fromUTF8(result);
-		#end
-		return result;
+		return CFFI.stringValue(result);
 		#else
 		return null;
 		#end
@@ -201,6 +207,58 @@ class ALC
 	{
 		#if (lime_cffi && lime_openal && !macro)
 		NativeCFFI.lime_alc_suspend_context(context);
+		#end
+	}
+
+	public static function isExtensionPresent(device:ALDevice, extname:String):Bool
+	{
+		#if (lime_cffi && lime_openal && !macro)
+		return NativeCFFI.lime_alc_is_extension_present(device, extname);
+		#else
+		return false;
+		#end
+	}
+
+	public static function eventControlSOFT(events:Array<Int>, enable:Bool):Void
+	{
+		#if (lime_cffi && lime_openal && !macro)
+		#if hl
+		var _events = null;
+		if (events != null)
+		{
+			_events = new hl.NativeArray<Int>(events.length);
+			for (i in 0...events.length)
+				_events[i] = events[i];
+		}
+		var events = _events;
+		#end
+		NativeCFFI.lime_alc_event_control_soft(events.length, events, enable);
+		#end
+	}
+
+	public static function eventCallbackSOFT(callback:Dynamic):Void
+	{
+		#if (lime_cffi && lime_openal && !macro)
+		NativeCFFI.lime_alc_event_callback_soft(callback);
+		#end
+	}
+
+	public static function reopenDeviceSOFT(device:ALDevice, newDeviceName:String, attributes:Array<Int>):Bool
+	{
+		#if (lime_cffi && lime_openal && !macro)
+		#if hl
+		var _attributes = null;
+		if (attributes != null)
+		{
+			_attributes = new hl.NativeArray<Int>(attributes.length);
+			for (i in 0...attributes.length)
+				_attributes[i] = attributes[i];
+		}
+		var attributes = _attributes;
+		#end
+		return NativeCFFI.lime_alc_reopen_device_soft(device, newDeviceName, attributes);
+		#else
+		return false;
 		#end
 	}
 }

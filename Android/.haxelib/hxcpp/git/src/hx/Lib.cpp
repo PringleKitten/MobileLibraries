@@ -352,13 +352,21 @@ String __hxcpp_get_bin_dir()
 {
    return
 #if defined(HX_WINRT)
-  #ifdef HXCPP_M64
+  #ifdef HXCPP_ARM64
+    HX_CSTRING("WinRTArm64");
+  #elif defined(HXCPP_ARMV7)
+    HX_CSTRING("WinRTArm");
+  #elif defined(HXCPP_M64)
     HX_CSTRING("WinRT64");
   #else
     HX_CSTRING("WinRT");
   #endif
 #elif defined(_WIN32)
-  #ifdef HXCPP_M64
+  #ifdef HXCPP_ARM64
+    HX_CSTRING("WindowsArm64");
+  #elif defined(HXCPP_ARMV7)
+    HX_CSTRING("WindowsArm");
+  #elif defined(HXCPP_M64)
     HX_CSTRING("Windows64");
   #else
     HX_CSTRING("Windows");
@@ -378,8 +386,6 @@ String __hxcpp_get_bin_dir()
     HX_CSTRING("webOS");
 #elif defined(BLACKBERRY)
     HX_CSTRING("BlackBerry");
-#elif defined(RASPBERRYPI)
-    HX_CSTRING("RPi");
 #elif defined(EMSCRIPTEN)
     HX_CSTRING("Emscripten");
 #elif defined(TIZEN)
@@ -393,7 +399,11 @@ String __hxcpp_get_bin_dir()
 #elif defined(APPLETVOS)
     HX_CSTRING("AppleTVOS");
 #else
-  #ifdef HXCPP_M64
+  #ifdef HXCPP_ARM64
+    HX_CSTRING("LinuxArm64");
+  #elif defined(HXCPP_ARMV7)
+    HX_CSTRING("LinuxArm");
+  #elif defined(HXCPP_M64)
     HX_CSTRING("Linux64");
   #else
     HX_CSTRING("Linux");
@@ -503,6 +513,25 @@ extern "C" void *hx_cffi(const char *inName);
 
 void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc,bool inQuietFail)
 {
+   if (inLib.length==0)
+   {
+      if (sgRegisteredPrims)
+      {
+         void *registered = (*sgRegisteredPrims)[full_name.__CStr()];
+         if (registered)
+            return registered;
+      }
+      if (!inQuietFail)
+      {
+         #ifdef ANDROID
+         __android_log_print(ANDROID_LOG_ERROR, "loader", "Could not find primitive %s in static link", full_name.__CStr());
+         #else
+         fprintf(stderr,"Could not find primitive %s in static link.\n", full_name.__CStr());
+         #endif
+      }
+      return nullptr;
+   }
+
    String bin = __hxcpp_get_bin_dir();
    String deviceExt = __hxcpp_get_dll_extension();
 

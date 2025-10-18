@@ -36,6 +36,7 @@ class WindowsPlatform extends PlatformTarget
 	private var applicationDirectory:String;
 	private var executablePath:String;
 	private var is64:Bool;
+	private var isArm:Bool;
 	private var targetType:String;
 	private var outputFile:String;
 
@@ -110,6 +111,8 @@ class WindowsPlatform extends PlatformTarget
 					defaults.architectures = [ARMV6];
 				case ARMV7:
 					defaults.architectures = [ARMV7];
+				case ARM64:
+					defaults.architectures = [ARM64];
 				case X86:
 					defaults.architectures = [X86];
 				case X64:
@@ -138,7 +141,7 @@ class WindowsPlatform extends PlatformTarget
 		{
 			targetType = "winjs";
 		}
-		else if (project.targetFlags.exists("neko") || project.target != cast System.hostPlatform)
+		else if (project.targetFlags.exists("neko"))
 		{
 			targetType = "neko";
 		}
@@ -175,7 +178,7 @@ class WindowsPlatform extends PlatformTarget
 
 		for (architecture in project.architectures)
 		{
-			if (architecture == Architecture.X64)
+			if (architecture == Architecture.X64 || architecture == Architecture.ARM64)
 			{
 				if ((targetType == "cpp" || targetType == "winrt"))
 				{
@@ -200,6 +203,10 @@ class WindowsPlatform extends PlatformTarget
 					}
 					catch (e:Dynamic) {}
 				}
+			}
+			if ((project.flags.exists("armv7") || architecture == Architecture.ARMV7) || (project.flags.exists("arm64") || architecture == Architecture.ARM64))
+			{
+				isArm = true;
 			}
 		}
 
@@ -296,7 +303,7 @@ class WindowsPlatform extends PlatformTarget
 				{
 					for (ndll in project.ndlls)
 					{
-						ProjectHelper.copyLibrary(project, ndll, "WinRT" + (is64 ? "64" : ""), "",
+						ProjectHelper.copyLibrary(project, ndll, "WinRT" + (isArm ? "Arm" : "") + (is64 ? "64" : ""), "",
 							(ndll.haxelib != null && (ndll.haxelib.name == "hxcpp" || ndll.haxelib.name == "hxlibc")) ? ".dll" : ".ndll",
 							applicationDirectory, project.debug, null);
 					}
@@ -311,12 +318,12 @@ class WindowsPlatform extends PlatformTarget
 					// TODO: Support single binary for HashLink
 					if (targetType == "hl")
 					{
-						ProjectHelper.copyLibrary(project, ndll, "Windows" + (is64 ? "64" : ""), "", ".hdll", applicationDirectory, project.debug,
+						ProjectHelper.copyLibrary(project, ndll, "Windows" + (isArm ? "Arm" : "") + (is64 ? "64" : ""), "", ".hdll", applicationDirectory, project.debug,
 							targetSuffix);
 					}
 					else
 					{
-						ProjectHelper.copyLibrary(project, ndll, "Windows" + (is64 ? "64" : ""), "",
+						ProjectHelper.copyLibrary(project, ndll, "Windows" + (isArm ? "Arm" : "") + (is64 ? "64" : ""), "",
 							(ndll.haxelib != null && (ndll.haxelib.name == "hxcpp" || ndll.haxelib.name == "hxlibc")) ? ".dll" : ".ndll",
 							applicationDirectory, project.debug, targetSuffix);
 					}
@@ -339,7 +346,7 @@ class WindowsPlatform extends PlatformTarget
 				}
 
 				NekoHelper.createWindowsExecutable(project.templatePaths, targetDirectory + "/obj/ApplicationMain.n", executablePath, iconPath);
-				NekoHelper.copyLibraries(project.templatePaths, "windows" + (is64 ? "64" : ""), applicationDirectory);
+				NekoHelper.copyLibraries(project.templatePaths, "windows" + (isArm ? "arm" : "") + (is64 ? "64" : ""), applicationDirectory);
 			}
 			else if (targetType == "hl")
 			{
@@ -363,7 +370,7 @@ class WindowsPlatform extends PlatformTarget
 
 				if (noOutput) return;
 
-				System.copyFile(Path.combine(Haxelib.getPath(new Haxelib("hxcpp")), "bin/Windows64/Cppia.exe"), executablePath);
+				System.copyFile(Path.combine(Haxelib.getPath(new Haxelib("hxcpp")), "bin/Windows" + (isArm ? "Arm" : "") + "64/Cppia.exe"), executablePath);
 				System.copyFile(targetDirectory + "/obj/ApplicationMain.cppia", Path.combine(applicationDirectory, "script.cppia"));
 
 				var iconPath = Path.combine(applicationDirectory, "icon.ico");
@@ -418,7 +425,7 @@ class WindowsPlatform extends PlatformTarget
 				System.recursiveCopy(targetDirectory + "/obj/lib", Path.combine(applicationDirectory, "lib"));
 				System.copyFile(targetDirectory + "/obj/ApplicationMain" + (project.debug ? "-Debug" : "") + ".jar",
 					Path.combine(applicationDirectory, project.app.file + ".jar"));
-				JavaHelper.copyLibraries(project.templatePaths, "Windows" + (is64 ? "64" : ""), applicationDirectory);
+				JavaHelper.copyLibraries(project.templatePaths, "Windows" + (isArm ? "Arm" : "") + (is64 ? "64" : ""), applicationDirectory);
 			}
 			else if (targetType == "winrt")
 			{
@@ -429,17 +436,31 @@ class WindowsPlatform extends PlatformTarget
 				haxeArgs.push("winrt");
 				flags.push("-Dwinrt");
 
-				// TODO: ARM support
-
 				if (is64)
 				{
-					haxeArgs.push("-D");
-					haxeArgs.push("HXCPP_M64");
-					flags.push("-DHXCPP_M64");
+					if (isArm)
+					{
+						haxeArgs.push("-D");
+						haxeArgs.push("HXCPP_ARM64");
+						flags.push("-DHXCPP_ARM64");
+					}
+					else
+					{
+						haxeArgs.push("-D");
+						haxeArgs.push("HXCPP_M64");
+						flags.push("-DHXCPP_M64");
+					}
 				}
 				else
 				{
-					flags.push("-DHXCPP_M32");
+					if (isArm)
+					{
+						flags.push("-DHXCPP_ARMV7");
+					}
+					else
+					{
+						flags.push("-DHXCPP_M32");
+					}
 				}
 
 				if (!project.environment.exists("SHOW_CONSOLE"))
@@ -482,18 +503,34 @@ class WindowsPlatform extends PlatformTarget
 			}
 			else
 			{
-				var haxeArgs = [hxml];
-				var flags = [];
+				var haxeArgs = [hxml, "-D", "resourceFile=ApplicationMain.rc"];
+				var flags = ["-DresourceFile=ApplicationMain.rc"];
 
 				if (is64)
 				{
-					haxeArgs.push("-D");
-					haxeArgs.push("HXCPP_M64");
-					flags.push("-DHXCPP_M64");
+					if (isArm)
+					{
+						haxeArgs.push("-D");
+						haxeArgs.push("HXCPP_ARM64");
+						flags.push("-DHXCPP_ARM64");
+					}
+					else
+					{
+						haxeArgs.push("-D");
+						haxeArgs.push("HXCPP_M64");
+						flags.push("-DHXCPP_M64");
+					}
 				}
 				else
 				{
-					flags.push("-DHXCPP_M32");
+					if (isArm)
+					{
+						flags.push("-DHXCPP_ARMV7");
+					}
+					else
+					{
+						flags.push("-DHXCPP_M32");
+					}
 				}
 
 				if (!project.environment.exists("SHOW_CONSOLE"))
@@ -509,6 +546,8 @@ class WindowsPlatform extends PlatformTarget
 
 					if (noOutput) return;
 
+					IconHelper.createWindowsIcon(icons, Path.combine(targetDirectory + "/obj", "ApplicationMain.ico"));
+
 					CPPHelper.compile(project, targetDirectory + "/obj", flags);
 
 					System.copyFile(targetDirectory + "/obj/ApplicationMain" + (project.debug ? "-debug" : "") + ".exe", executablePath);
@@ -519,18 +558,13 @@ class WindowsPlatform extends PlatformTarget
 
 					if (noOutput) return;
 
+					IconHelper.createWindowsIcon(icons, Path.combine(targetDirectory + "/obj", "ApplicationMain.ico"));
+
 					CPPHelper.compile(project, targetDirectory + "/obj", flags.concat(["-Dstatic_link"]));
+
 					CPPHelper.compile(project, targetDirectory + "/obj", flags, "BuildMain.xml");
 
 					System.copyFile(targetDirectory + "/obj/Main" + (project.debug ? "-debug" : "") + ".exe", executablePath);
-				}
-
-				var iconPath = Path.combine(applicationDirectory, "icon.ico");
-
-				if (IconHelper.createWindowsIcon(icons, iconPath) && System.hostPlatform == WINDOWS)
-				{
-					var templates = [Haxelib.getPath(new Haxelib(#if lime "lime" #else "hxp" #end)) + "/templates"].concat(project.templatePaths);
-					System.runCommand("", System.findTemplate(templates, "bin/ReplaceVistaIcon.exe"), [executablePath, iconPath, "1"], true, true);
 				}
 			}
 		}
@@ -589,17 +623,36 @@ class WindowsPlatform extends PlatformTarget
 		else if (targetType == "winrt")
 		{
 			context.CPP_DIR = targetDirectory + "/obj";
-			context.BUILD_DIR = project.app.path + "/winrt" + (is64 ? "64" : "");
+			context.BUILD_DIR = project.app.path + "/winrt" + (isArm ? "arm" : "") + (is64 ? "64" : "");
 			context.DC = "::";
 		}
 		else
 		{
+			if (context.APP_DESCRIPTION == null || context.APP_DESCRIPTION == "")
+			{
+				context.APP_DESCRIPTION = project.meta.title;
+			}
+
+			if (context.APP_COPYRIGHT_YEARS == null || context.APP_COPYRIGHT_YEARS == "")
+			{
+				context.APP_COPYRIGHT_YEARS = Std.string(Date.now().getFullYear());
+			}
+
+			var versionParts = project.meta.version.split(".");
+			if (versionParts.length == 3)
+			{
+				versionParts.push("0");
+			}
+
+			context.FILE_VERSION = versionParts.join(".");
+			context.VERSION_NUMBER = versionParts.join(",");
+
 			context.NEKO_FILE = targetDirectory + "/obj/ApplicationMain.n";
 			context.NODE_FILE = targetDirectory + "/bin/ApplicationMain.js";
 			context.HL_FILE = targetDirectory + "/obj/ApplicationMain.hl";
 			context.CPPIA_FILE = targetDirectory + "/obj/ApplicationMain.cppia";
 			context.CPP_DIR = targetDirectory + "/obj";
-			context.BUILD_DIR = project.app.path + "/windows" + (is64 ? "64" : "");
+			context.BUILD_DIR = project.app.path + "/windows" + (isArm ? "arm" : "") + (is64 ? "64" : "");
 		}
 
 		return context;
@@ -664,6 +717,32 @@ class WindowsPlatform extends PlatformTarget
 			}
 			else
 			{
+				if (((!targetFlags.exists("armv7") && System.hostArchitecture == ARM64) || (targetFlags.exists("arm64")))
+					&& (command != "rebuild" || targetType == "cpp" || targetType == "winrt"))
+				{
+					if (targetType == "winrt")
+					{
+						commands.push(["-Dwinrt", "-DHXCPP_ARM64"]);
+					}
+					else
+					{
+						commands.push(["-Dwindows", "-DHXCPP_ARM64"]);
+					}
+				}
+
+				if (((!targetFlags.exists("arm64") && System.hostArchitecture == ARMV7) || (targetFlags.exists("armv7")))
+					&& (command != "rebuild" || (targetType != "cpp" && targetType != "winrt")))
+				{
+					if (targetType == "winrt")
+					{
+						commands.push(["-Dwinrt", "-DHXCPP_ARMV7"]);
+					}
+					else
+					{
+						commands.push(["-Dwindows", "-DHXCPP_ARMV7"]);
+					}
+				}
+
 				if (!targetFlags.exists("64")
 					&& (command == "rebuild" || System.hostArchitecture == X86 || (targetType != "cpp" && targetType != "winrt")))
 				{
@@ -867,7 +946,7 @@ class WindowsPlatform extends PlatformTarget
 
 				if (ndll.path == null || ndll.path == "")
 				{
-					context.ndlls[i].path = NDLL.getLibraryPath(ndll, (targetType == "winrt" ? "WinRT" : "Windows") + (is64 ? "64" : ""), "lib", suffix,
+					context.ndlls[i].path = NDLL.getLibraryPath(ndll, (targetType == "winrt" ? "WinRT" : "Windows") + (isArm ? "Arm" : "") + (is64 ? "64" : ""), "lib", suffix,
 						project.debug);
 				}
 			}
@@ -891,9 +970,14 @@ class WindowsPlatform extends PlatformTarget
 			ProjectHelper.recursiveSmartCopyTemplate(project, "winrt/temp", targetDirectory + "/haxe/temp", context, false, true);
 			ProjectHelper.recursiveSmartCopyTemplate(project, "winrt/scripts", targetDirectory + "/scripts", context, true, true);
 		}
-		else if (targetType == "cpp" && project.targetFlags.exists("static"))
+		else if (targetType == "cpp")
 		{
-			ProjectHelper.recursiveSmartCopyTemplate(project, "cpp/static", targetDirectory + "/obj", context);
+			ProjectHelper.recursiveSmartCopyTemplate(project, "windows/resource", targetDirectory + "/obj", context);
+
+			if (project.targetFlags.exists("static"))
+			{
+				ProjectHelper.recursiveSmartCopyTemplate(project, "cpp/static", targetDirectory + "/obj", context);
+			}
 		}
 
 		/*if (IconHelper.createIcon (project.icons, 32, 32, Path.combine (applicationDirectory, "icon.png"))) {
